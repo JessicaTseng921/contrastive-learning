@@ -85,14 +85,13 @@ data_augmentation = keras.Sequential(
     layers.RandomHeight(0.2),
     layers.RandomZoom(0.3),]
 )
-'''
-print('dataaug=',data_augmentation)
+
 
 inputs = keras.Input(shape=input_shape)
 x = data_augmentation(inputs)
 x = layers.Rescaling(1./255)(x)
 # x = layers.Rescaling(1./255)(inputs)
-'''
+
 train_ds = train_ds.prefetch(buffer_size=32)
 val_ds = val_ds.prefetch(buffer_size=32)
 
@@ -149,7 +148,7 @@ def create_classifier(encoder, trainable=True):
     model = keras.Model(inputs=inputs, outputs=outputs)
     model.compile(
         optimizer=keras.optimizers.Adam(0.001),
-        loss=SupervisedContrastiveLoss(temperature),
+        loss="binary_crossentropy",
         metrics=["accuracy"],
     )
     return model
@@ -189,5 +188,4 @@ plt.title('Training and validation loss')
 plt.legend()
 
 plt.show()
-
 
