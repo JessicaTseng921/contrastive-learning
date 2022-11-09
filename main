@@ -1,0 +1,193 @@
+import tensorflow as tf
+from tensorflow import keras
+from tensorflow.keras import layers
+import tensorflow_addons as tfa
+import tensorflow_addons as tfa
+import numpy as np
+import os
+
+#tif to jpg
+yourpath = "C:/pythonwork/HS"
+for root, dirs, files in os.walk(yourpath, topdown=False):
+    for name in files:
+        print(os.path.join(root, name))
+        if os.path.splitext(os.path.join(root, name))[1].lower() == ".tif":
+            if os.path.isfile(os.path.splitext(os.path.join(root, name))[0] + ".jpg"):
+                print ("A jpeg file already exists for %s" % name)
+            # If a jpeg is *NOT* present, create one from the tiff.
+            else:
+                outfile = os.path.splitext(os.path.join(root, name))[0] + ".jpg"
+                try:
+                    im = Image.open(os.path.join(root, name))
+                    print ("Generating jpeg for %s" % name)
+                    im.thumbnail(im.size)
+                    im.save(outfile, "JPEG", quality=100)
+                    im.close()
+                    os.remove(os.path.join(root, name))
+                except Exception as ex:
+                    print (e)
+
+#Delete corrupted image
+num_skipped = 0
+for folder_name in ("OK", "NG"):
+    folder_path = os.path.join("HS", folder_name)
+    for fname in os.listdir(folder_path):
+        fpath = os.path.join(folder_path, fname)
+        try:
+            fobj = open(fpath, "rb")
+            is_jfif = tf.compat.as_bytes("JFIF") in fobj.peek(10)
+        finally:
+            fobj.close()
+
+        if not is_jfif:
+            num_skipped += 1
+            os.remove(fpath)
+
+print("Deleted %d images" % num_skipped)
+
+#print(data_augmentation)
+# load data for training and validation
+
+IMAGE_SIZE = 32
+image_size = (IMAGE_SIZE,IMAGE_SIZE)
+batch_size = 265
+input_shape = (IMAGE_SIZE,IMAGE_SIZE,3)
+num_classes=2
+
+train_ds = tf.keras.preprocessing.image_dataset_from_directory(
+    "HS",
+    validation_split=0.5,
+    subset="training",
+    seed=1337,
+#   color_mode="grayscale",
+    image_size=image_size,
+    batch_size=batch_size,
+)
+val_ds = tf.keras.preprocessing.image_dataset_from_directory(
+    "HS",
+    validation_split=0.5,
+    subset="validation",
+    seed=1337,
+#   color_mode="grayscale",
+    image_size=image_size,
+    batch_size=batch_size,
+)
+
+print("train before is :",len(list(train_ds)))
+print("val before is :",len(list(val_ds)))
+
+# data augmentation-讓 images for training 的數量變原來的2倍
+data_augmentation = keras.Sequential(
+   [
+    layers.RandomFlip("horizontal"),
+    layers.RandomRotation(0.0),
+    layers.RandomWidth(0.2),
+    layers.RandomHeight(0.2),
+    layers.RandomZoom(0.3),]
+)
+'''
+print('dataaug=',data_augmentation)
+
+inputs = keras.Input(shape=input_shape)
+x = data_augmentation(inputs)
+x = layers.Rescaling(1./255)(x)
+# x = layers.Rescaling(1./255)(inputs)
+'''
+train_ds = train_ds.prefetch(buffer_size=32)
+val_ds = val_ds.prefetch(buffer_size=32)
+
+
+# convolution layer and activation function
+print("train after is :",len(list(train_ds)))
+print("val after is :",len(list(val_ds)))
+'''
+def create_encoder():
+    resnet = keras.applications.ResNet50V2(
+        include_top=False, weights=None, input_shape=input_shape, pooling="avg"
+    )
+
+    inputs = keras.Input(shape=input_shape)
+    augmented = data_augmentation(inputs)
+    outputs = resnet(augmented)
+    model = keras.Model(inputs=inputs, outputs=outputs, name="cifar10-encoder")
+    return model
+'''
+def make_model():
+    resnet = keras.applications.ResNet50V2(
+        include_top=False, weights=None, input_shape=input_shape, pooling="avg"
+    )
+    inputs = keras.Input(shape=input_shape)
+    # Image augmentation block
+    augmented = data_augmentation(inputs)
+    outputs = resnet(augmented)
+    return keras.Model(inputs, outputs)
+
+encoder = make_model()
+#keras.utils.plot_model(model, show_shapes=True)
+encoder.summary()
+
+#save every training result
+
+epochs = 1
+hidden_units = 512
+projection_units = 128
+dropout_rate = 0.5
+temperature = 0.05
+
+def create_classifier(encoder, trainable=True):
+
+    for layer in encoder.layers:
+        layer.trainable = trainable
+
+    inputs = keras.Input(shape=input_shape)
+    features = encoder(inputs)
+    features = layers.Dropout(dropout_rate)(features)
+    features = layers.Dense(hidden_units, activation="relu")(features)
+    features = layers.Dropout(dropout_rate)(features)
+    outputs = layers.Dense(num_classes, activation="softmax")(features)
+
+    model = keras.Model(inputs=inputs, outputs=outputs)
+    model.compile(
+        optimizer=keras.optimizers.Adam(0.001),
+        loss=SupervisedContrastiveLoss(temperature),
+        metrics=["accuracy"],
+    )
+    return model
+
+encoder = make_model()
+classifier = create_classifier(encoder)
+classifier.summary()
+
+callbacks = [
+    keras.callbacks.ModelCheckpoint("save_at_{epoch}.h5"),
+]
+
+history = classifier.fit(train_ds, epochs=epochs, callbacks=callbacks, validation_data=val_ds)
+
+# plot accuracy and loss figure
+
+
+import matplotlib.pyplot as plt
+
+acc = history.history['accuracy']
+val_acc = history.history['val_accuracy']
+loss = history.history['loss']
+val_loss = history.history['val_loss']
+
+epochs = range(1, len(acc) + 1)
+
+plt.plot(epochs, acc, 'bo', label='Training acc')
+plt.plot(epochs, val_acc, 'b', label='Validation acc')
+plt.title('Training and validation accuracy')
+plt.legend()
+
+plt.figure()
+
+plt.plot(epochs, loss, 'bo', label='Training loss')
+plt.plot(epochs, val_loss, 'b', label='Validation loss')
+plt.title('Training and validation loss')
+plt.legend()
+
+plt.show()
+
+
